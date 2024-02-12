@@ -23,6 +23,7 @@ const getUser = async (token) => {
     return user;
   } catch (err) {
     console.log(err);
+    return null;
   }
 };
 

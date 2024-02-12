@@ -10,7 +10,7 @@ class DBClient {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
-    (async () => await this.client.connect())();
+    (async () => this.client.connect())();
 
     this.db = this.client.db(this.database);
     this.users = this.db.collection('users');
