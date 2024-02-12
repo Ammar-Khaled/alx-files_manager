@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 const { ObjectId } = require('mongodb');
 const fs = require('fs');
 const mime = require('mime-types');
+const Queue = require('bull');
 const dbClient = require('../utils/db');
 const getUser = require('../utils/getUser');
 
@@ -29,7 +30,7 @@ class FilesController {
       return res.status(400).json({ error: 'Missing name' });
     }
 
-    if (!type || ['folder', 'file', 'image'].includes(type)) {
+    if (!type || !['folder', 'file', 'image'].includes(type)) {
       return res.status(400).json({ error: 'Missing type' });
     }
 
@@ -86,6 +87,15 @@ class FilesController {
       ...newFile,
       localPath,
     });
+
+    const fileQueue = new Queue('fileQueue', 'redis://127.0.0.1:6379');
+    if (newFile.type === 'image') {
+      fileQueue.add({
+        fileId: insertionResult.insertedId,
+        userId: newFile.userId,
+      });
+    }
+
     return res.status(201).json({ id: insertionResult.insertedId, ...newFile });
   }
 
@@ -187,6 +197,7 @@ class FilesController {
 
   static async getFile(req, res) {
     const { id } = req.params;
+    const { size } = req.query;
     const file = await dbClient.files.findOne({ _id: ObjectId(id) });
     if (!file) {
       return res.status(404).json({ error: 'Not found' });
@@ -209,7 +220,7 @@ class FilesController {
     }
 
     try {
-      const data = await fs.promises.readFile(file.localPath);
+      const data = await fs.promises.readFile(`${file.localPath}_${size}`);
       return res.type(mime.lookup(file.name)).send(data);
     } catch (err) {
       return res.status(404).json({ error: 'Not found' });
