@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+const { v4: uuidv4 } = require('uuid');
 
 const { ObjectId } = require('mongodb');
 const fs = require('fs');
@@ -75,12 +75,14 @@ class FilesController {
       if (err) {
         return res.status(400).json({ error: err });
       }
+      return true;
     });
 
     fs.writeFile(localPath, Buffer.from(data, 'base64'), (err) => {
       if (err) {
         return res.status(400).json({ error: err });
       }
+      return true;
     });
 
     const insertionResult = await dbClient.files.insertOne({
@@ -127,26 +129,40 @@ class FilesController {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const parentId = req.query.parentId || 0;
-    const page = req.query.page || 0;
+    let parentId = req.query.parentId || 0;
+    if (parentId === '0') parentId = 0;
+    if (parentId !== 0) {
+      const folder = await dbClient.files.findOne({
+        _id: ObjectId(parentId),
+        userId: user._id,
+      });
+      if (!folder) {
+        return res.send([]);
+      }
+    }
 
-    const files = await dbClient.files
-      .aggregate([
-        { $match: { parentId } },
-        { $skip: page * 20 },
-        { $limit: 20 },
-      ])
-      .toArray();
+    const page = req.query.page || 0;
+    const filterQuery = [
+      { $match: { parentId } },
+      { $skip: page * 20 },
+      { $limit: 20 },
+    ];
+
+    if (parentId === 0) {
+      filterQuery.shift();
+    }
+
+    const files = await dbClient.files.aggregate(filterQuery).toArray();
 
     const response = [];
-    files.forEach((file) => {
+    for (const file of files) {
       const id = file._id;
       delete file.localPath;
       delete file._id;
       response.push({ id, ...file });
-    });
+    }
 
-    return res.json(response);
+    return res.send(response);
   }
 
   static async putPublish(req, res) {
