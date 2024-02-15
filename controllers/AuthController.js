@@ -1,32 +1,45 @@
-import { v4 as uuidv4 } from 'uuid';
-import redisClient from '../utils/redis';
-
+const uuidv4 = require('uuid').v4;
 const sha1 = require('sha1');
+const redisClient = require('../utils/redis');
 const dbClient = require('../utils/db');
 
 class AuthController {
-  static getConnect(req, res) {
-    const b64Auth = req.headers.authorization.split(' ')[1];
-    const decodedAuth = Buffer.from(b64Auth, 'base64').toString('utf-8');
-    const email = decodedAuth.split(':')[0];
-    const password = decodedAuth.split(':')[1];
+  static async getConnect(req, res) {
+    const authHeader = req.headers.authorization || '';
+    const b64Auth = authHeader.split(' ')[1];
 
-    dbClient.users
-      .findOne({
+    if (!b64Auth) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const decodedAuth = Buffer.from(b64Auth, 'base64').toString('utf-8');
+    if (!decodedAuth || !decodedAuth.includes(':')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const [email, password] = decodedAuth.split(':');
+    if (!email || !password) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    try {
+      const user = await dbClient.users.findOne({
         email,
         password: sha1(password),
-      })
-      .then((result) => {
-        if (!result) {
-          res.status(401).json({ error: 'Unauthorized' });
-          return;
-        }
-
-        const token = uuidv4();
-        const key = `auth_${token}`;
-        redisClient.set(key, result._id.toString(), 24 * 60 * 60);
-        res.status(200).json({ token });
       });
+
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      const token = uuidv4();
+      const key = `auth_${token}`;
+      redisClient.set(key, user._id.toString(), 24 * 60 * 60);
+      return res.status(200).json({ token });
+    } catch (err) {
+      console.log(err);
+      return res.status(500).json({ error: 'Server error' });
+    }
   }
 
   static getDisconnect(req, res) {
