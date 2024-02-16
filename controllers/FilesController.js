@@ -1,5 +1,4 @@
 const { v4: uuidv4 } = require('uuid');
-
 const { ObjectId } = require('mongodb');
 const fs = require('fs');
 const mime = require('mime-types');
@@ -152,17 +151,21 @@ class FilesController {
       filterQuery.shift();
     }
 
-    const files = await dbClient.files.aggregate(filterQuery).toArray();
-
-    const response = [];
-    for (const file of files) {
-      const id = file._id;
-      delete file.localPath;
-      delete file._id;
-      response.push({ id, ...file });
+    try {
+      const files = await dbClient.files.aggregate(filterQuery).toArray();
+      console.log(files);
+      const response = [];
+      for (const file of files) {
+        const id = file._id;
+        delete file.localPath;
+        delete file._id;
+        response.push({ id, ...file });
+      }
+      return res.send(response);
+    } catch (err) {
+      console.log(err);
+      return false;
     }
-
-    return res.send(response);
   }
 
   static async putPublish(req, res) {
@@ -236,8 +239,13 @@ class FilesController {
     }
 
     try {
-      const data = await fs.promises.readFile(`${file.localPath}_${size}`);
-      return res.type(mime.lookup(file.name)).send(data);
+      if (size !== 0) {
+        file.localPath += `_${size}`;
+      }
+      const data = await fs.promises.readFile(file.localPath);
+      const contentType = mime.contentType(file.name);
+      res.setHeader('Content-Type', contentType);
+      return res.send(data);
     } catch (err) {
       return res.status(404).json({ error: 'Not found' });
     }
