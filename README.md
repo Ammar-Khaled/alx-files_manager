@@ -63,7 +63,7 @@ The objective is to build a simple platform to upload and view files:
 
 ## Installation
 ```bash
-$ git clone
+$ git clone https://github.com/Ammar-Khaled/alx-files_manager.git files_manager
 $ cd files_manager
 $ npm install
 $ npm run start-server
